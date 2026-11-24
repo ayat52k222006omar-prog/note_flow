@@ -4,6 +4,7 @@ import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
 import '../core/app_theme.dart';
 import '../models/note_model.dart';
 import '../services/alarm_service.dart';
+import 'rich_text_tools.dart';
 
 class EditTaskSheet extends StatefulWidget {
   final NoteModel task;
@@ -16,7 +17,8 @@ class EditTaskSheet extends StatefulWidget {
 
 class _EditTaskSheetState extends State<EditTaskSheet> {
   late final TextEditingController _titleController;
-  late final TextEditingController _descController;
+  late final RichTextController _descController;
+  late final List<String> _tags;
   late String _priority;
   DateTime? _alarmTime;
 
@@ -26,7 +28,9 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.task.title);
-    _descController = TextEditingController(text: widget.task.subTitle);
+    final parts = splitTags(widget.task.subTitle);
+    _descController = RichTextController(text: parts.$1);
+    _tags = parts.$2;
     _priority = _priorities.contains(widget.task.priority)
         ? widget.task.priority
         : 'Medium';
@@ -76,7 +80,7 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
     final cubit = BlocProvider.of<NotesCubit>(context);
     final updated = widget.task.copyWith(
       title: title,
-      subTitle: _descController.text.trim(),
+      subTitle: joinTags(_descController.text.trim(), _tags),
       priority: _priority,
       alarmTime: _alarmTime,
     );
@@ -87,7 +91,9 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
       await AlarmService.instance.scheduleAlarm(
         id: updated.id,
         title: updated.title,
-        body: updated.subTitle.isNotEmpty ? updated.subTitle : 'Scheduled reminder',
+        body: stripRich(updated.subTitle).isNotEmpty
+            ? stripRich(updated.subTitle)
+            : 'Scheduled reminder',
         scheduledTime: _alarmTime!,
       );
     } else {
@@ -168,6 +174,15 @@ class _EditTaskSheetState extends State<EditTaskSheet> {
               ),
             ),
             const SizedBox(height: 12),
+            if (!widget.task.isTask) ...[
+              RichToolbar(
+                controller: _descController,
+                cardColor: context.cardColor,
+                borderColor: isDark ? AppColors.darkBorder : Colors.black12,
+                iconColor: context.secondaryTextColor,
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _descController,
               maxLines: 4,

@@ -4,6 +4,7 @@ import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
 import '../core/app_theme.dart';
 import '../models/note_model.dart';
 import '../widgets/edit_task_sheet.dart';
+import '../widgets/rich_text_tools.dart';
 
 class NotesView extends StatefulWidget {
   const NotesView({super.key});
@@ -16,6 +17,26 @@ class _NotesViewState extends State<NotesView> {
   String _selectedCategory = 'All';
   bool _isGrid = true;
   final List<String> _categories = ['All', 'Work', 'Personal', 'Study'];
+
+  Widget _viewBtn(IconData icon, bool active, VoidCallback onTap) {
+    final isDark = context.isDarkMode;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: active
+              ? (isDark ? AppColors.darkAccentPurple : AppColors.slateBlue)
+              : (isDark ? AppColors.darkCard : AppColors.warmSand),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon,
+            size: 20, color: active ? Colors.white : context.primaryTextColor),
+      ),
+    );
+  }
 
   void _openNoteEditor(BuildContext context, NoteModel note) {
     showModalBottomSheet(
@@ -38,12 +59,11 @@ class _NotesViewState extends State<NotesView> {
       appBar: AppBar(
         title: const Text('Notes'),
         actions: [
-          IconButton(
-            icon: Icon(
-              _isGrid ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
-            ),
-            onPressed: () => setState(() => _isGrid = !_isGrid),
-          ),
+          _viewBtn(Icons.grid_view_rounded, _isGrid,
+              () => setState(() => _isGrid = true)),
+          _viewBtn(Icons.view_agenda_outlined, !_isGrid,
+              () => setState(() => _isGrid = false)),
+          const SizedBox(width: 12),
         ],
       ),
       body: BlocBuilder<NotesCubit, NotesState>(
@@ -167,7 +187,10 @@ class _NotesViewState extends State<NotesView> {
                           itemCount: filtered.length,
                           itemBuilder: (_, i) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
-                            child: _buildNoteCard(context, filtered[i], isDark),
+                            child: SizedBox(
+                              height: 130,
+                              child: _buildNoteCard(context, filtered[i], isDark),
+                            ),
                           ),
                         ),
                 ),
@@ -203,23 +226,36 @@ class _NotesViewState extends State<NotesView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                note.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: titleColor,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      note.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: titleColor,
+                      ),
+                    ),
+                  ),
+                  if (note.isPinned)
+                    Icon(Icons.push_pin, size: 16, color: metaColor),
+                ],
               ),
               const SizedBox(height: 6),
               Expanded(
-                child: Text(
-                  note.subTitle,
+                child: Text.rich(
+                  TextSpan(
+                    children: parseRich(
+                      splitTags(note.subTitle).$1,
+                      TextStyle(fontSize: 12, color: bodyColor),
+                      keepMarkers: false,
+                    ),
+                  ),
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: bodyColor),
                 ),
               ),
               const SizedBox(height: 8),

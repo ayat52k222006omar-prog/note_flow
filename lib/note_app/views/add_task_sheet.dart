@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:myfirstapp/note_app/core/app_theme.dart';
 import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
 import 'package:myfirstapp/note_app/models/note_model.dart';
+import 'package:myfirstapp/note_app/services/alarm_service.dart';
 
 class AddTaskSheet extends StatefulWidget {
   const AddTaskSheet({super.key});
@@ -17,6 +18,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   String _priority = 'Medium';
   bool _isTask = true;
   DateTime? _selectedAlarm;
+  late String _selectedSoundId = AlarmService.instance.defaultSoundId;
   bool _isSaving = false;
 
   @override
@@ -86,6 +88,23 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
           .read<NotesCubit>()
           .addNote(note)
           .timeout(const Duration(seconds: 4));
+
+      if (_selectedAlarm != null && _selectedAlarm!.isAfter(DateTime.now())) {
+        try {
+          await AlarmService.instance
+              .scheduleAlarm(
+                id: note.id,
+                title: note.title,
+                body: note.subTitle,
+                scheduledTime: _selectedAlarm!,
+                soundOption: _selectedSoundId,
+              )
+              .timeout(const Duration(seconds: 2));
+        } catch (e) {
+          debugPrint('AddTaskSheet alarm warning: $e');
+        }
+      }
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       debugPrint('AddTaskSheet save error: $e');
@@ -207,6 +226,36 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
               style: TextStyle(color: context.primaryTextColor),
             ),
           ),
+          if (_selectedAlarm != null) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _selectedSoundId,
+              dropdownColor: context.cardColor,
+              style: TextStyle(color: context.primaryTextColor),
+              decoration: InputDecoration(
+                labelText: 'Alarm Sound',
+                labelStyle: TextStyle(color: context.secondaryTextColor),
+                prefixIcon: Icon(Icons.music_note_rounded, color: context.secondaryTextColor),
+                filled: true,
+                fillColor: context.cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: context.borderColor),
+                ),
+              ),
+              items: AlarmService.soundOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String>(
+                      value: opt.id,
+                      child: Text(opt.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedSoundId = val);
+              },
+            ),
+          ],
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,

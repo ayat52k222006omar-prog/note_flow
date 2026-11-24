@@ -1,9 +1,11 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
+import 'package:myfirstapp/note_app/views/home_view.dart';
 import '../core/app_theme.dart';
 import '../core/theme_controller.dart';
-import 'login_view.dart';
+//import 'login_view.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -22,6 +24,21 @@ class _ProfileViewState extends State<ProfileView> {
   bool _appLockEnabled = false;
   bool _confirmBeforeDelete = true;
 
+  final AudioPlayer _previewPlayer = AudioPlayer();
+  String _selectedSoundFile = 'sound1.mp3';
+  String? _playingSoundFile;
+
+  static const List> _soundOptions = [
+    {'file': 'sound1.mp3', 'label': 'Sound 1'},
+    {'file': 'sound2.mp3', 'label': 'Sound 2'},
+    {'file': 'sound3.mp3', 'label': 'Sound 3'},
+    {'file': 'sound4.mp3', 'label': 'Sound 4'},
+    {'file': 'sound5.mp3', 'label': 'Sound 5'},
+    {'file': 'sound6.mp3', 'label': 'Sound 6'},
+    {'file': 'sound7.mp3', 'label': 'Sound 7'},
+    {'file': 'sound8.mp3', 'label': 'Sound 8'},
+  ];
+
   bool get _isDark => AppThemeController.instance.isDark;
 
   Color get _surfaceCardColor =>
@@ -32,6 +49,58 @@ class _ProfileViewState extends State<ProfileView> {
 
   Color get _secondaryTextColor =>
       _isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+
+  @override
+  void dispose() {
+    _previewPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePreviewSound(
+    String fileName,
+    void Function(void Function()) setModalState,
+  ) async {
+    if (!_alarmSoundEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enable Alarm Sound first to listen')),
+      );
+      return;
+    }
+
+    if (_playingSoundFile == fileName) {
+      await _previewPlayer.stop();
+      if (mounted) {
+        setModalState(() => _playingSoundFile = null);
+        setState(() => _playingSoundFile = null);
+      }
+      return;
+    }
+
+    try {
+      await _previewPlayer.stop();
+      await _previewPlayer.play(AssetSource('sounds/$fileName'));
+      if (mounted) {
+        setModalState(() => _playingSoundFile = fileName);
+        setState(() => _playingSoundFile = fileName);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not play $fileName: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopPreview(void Function(void Function())? setModalState) async {
+    try {
+      await _previewPlayer.stop();
+    } catch (_) {}
+    if (mounted) {
+      setModalState?.call(() => _playingSoundFile = null);
+      setState(() => _playingSoundFile = null);
+    }
+  }
 
   void _editProfileDialog() {
     final nameCtrl = TextEditingController(text: _userName);
@@ -185,41 +254,159 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   void _openNotifications() {
-    _showSheet(
-      title: 'Notifications & Alarms',
-      child: StatefulBuilder(
-        builder: (ctx, setModalState) => Column(
-          children: [
-            SwitchListTile(
-              title: Text('Alarm Sound', style: TextStyle(color: _primaryTextColor)),
-              subtitle: Text(
-                'Play sound when scheduled alarms trigger',
-                style: TextStyle(color: _secondaryTextColor),
-              ),
-              value: _alarmSoundEnabled,
-              activeColor: AppColors.darkAccentPurple,
-              onChanged: (v) {
-                setModalState(() => _alarmSoundEnabled = v);
-                setState(() => _alarmSoundEnabled = v);
-              },
-            ),
-            SwitchListTile(
-              title: Text('Due & Reminder Alerts', style: TextStyle(color: _primaryTextColor)),
-              subtitle: Text(
-                'Notify for upcoming tasks and notes',
-                style: TextStyle(color: _secondaryTextColor),
-              ),
-              value: _overdueAlertsEnabled,
-              activeColor: AppColors.darkAccentPurple,
-              onChanged: (v) {
-                setModalState(() => _overdueAlertsEnabled = v);
-                setState(() => _overdueAlertsEnabled = v);
-              },
-            ),
-          ],
-        ),
+    void Function(void Function())? modalUpdater;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _isDark ? AppColors.darkSurface : AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    );
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          modalUpdater = setModalState;
+          final accent = _isDark ? AppColors.darkAccentPurple : AppColors.primaryDark;
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      decoration: BoxDecoration(
+                        color: _isDark ? Colors.white24 : AppColors.warmSand,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Notifications & Alarms',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Alarm Sound', style: TextStyle(color: _primaryTextColor)),
+                    subtitle: Text(
+                      'Play sound when scheduled alarms trigger',
+                      style: TextStyle(color: _secondaryTextColor),
+                    ),
+                    value: _alarmSoundEnabled,
+                    activeColor: AppColors.darkAccentPurple,
+                    onChanged: (v) async {
+                      if (!v) await _stopPreview(setModalState);
+                      setModalState(() => _alarmSoundEnabled = v);
+                      setState(() => _alarmSoundEnabled = v);
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Due & Reminder Alerts', style: TextStyle(color: _primaryTextColor)),
+                    subtitle: Text(
+                      'Notify for upcoming tasks and notes',
+                      style: TextStyle(color: _secondaryTextColor),
+                    ),
+                    value: _overdueAlertsEnabled,
+                    activeColor: AppColors.darkAccentPurple,
+                    onChanged: (v) {
+                      setModalState(() => _overdueAlertsEnabled = v);
+                      setState(() => _overdueAlertsEnabled = v);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Listen & Choose Sound',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 290),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _soundOptions.length,
+                      itemBuilder: (_, index) {
+                        final opt = _soundOptions[index];
+                        final file = opt['file']!;
+                        final label = opt['label']!;
+                        final isSelected = _selectedSoundFile == file;
+                        final isPlaying = _playingSoundFile == file;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: _surfaceCardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isSelected
+                                  ? accent
+                                  : (_isDark ? AppColors.darkBorder : Colors.transparent),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            dense: true,
+                            onTap: () {
+                              setModalState(() => _selectedSoundFile = file);
+                              setState(() => _selectedSoundFile = file);
+                            },
+                            leading: IconButton(
+                              tooltip: isPlaying ? 'Stop sound' : 'Listen first',
+                              icon: Icon(
+                                isPlaying
+                                    ? Icons.stop_circle_rounded
+                                    : Icons.play_circle_fill_rounded,
+                                color: _alarmSoundEnabled ? accent : _secondaryTextColor,
+                                size: 28,
+                              ),
+                              onPressed: () => _togglePreviewSound(file, setModalState),
+                            ),
+                            title: Text(
+                              label,
+                              style: TextStyle(
+                                color: _primaryTextColor,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                            subtitle: Text(
+                              isPlaying ? 'Playing preview...' : file,
+                              style: TextStyle(
+                                color: isPlaying ? accent : _secondaryTextColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: Icon(
+                              isSelected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              color: isSelected ? accent : _secondaryTextColor,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).whenComplete(() => _stopPreview(modalUpdater));
   }
 
   void _openSecurity() {
@@ -490,6 +677,7 @@ class _ProfileViewState extends State<ProfileView> {
           leadingBg: isDark ? const Color(0xFF3A2D32) : const Color(0xFFF3D8D2),
           leadingIcon: Icons.notifications_none_rounded,
           title: 'Notifications',
+          subtitle: 'Sound: $_selectedSoundFile',
           trailing: Icon(Icons.chevron_right, color: _secondaryTextColor),
           onTap: _openNotifications,
         ),
@@ -542,7 +730,7 @@ class _ProfileViewState extends State<ProfileView> {
               onPressed: () {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginView()),
+                  MaterialPageRoute(builder: (_) => const HomeView()),
                   (_) => false,
                 );
               },

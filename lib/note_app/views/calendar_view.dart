@@ -32,13 +32,32 @@ class _CalendarViewState extends State<CalendarView> {
     return DateTime(date.year, date.month, 1).weekday % 7;
   }
 
+  DateTime? _createdDate(NoteModel n) {
+    final p = n.date.split('/');
+    if (p.length != 3) return null;
+    final d = int.tryParse(p[0]);
+    final m = int.tryParse(p[1]);
+    final y = int.tryParse(p[2]);
+    if (d == null || m == null || y == null) return null;
+    return DateTime(y, m, d);
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   bool _matchesSelectedDay(NoteModel item) {
-    if (item.alarmTime != null) {
-      return item.alarmTime!.year == _focusedMonth.year &&
-          item.alarmTime!.month == _focusedMonth.month &&
-          item.alarmTime!.day == _selectedDay;
-    }
-    return false;
+    final selected =
+        DateTime(_focusedMonth.year, _focusedMonth.month, _selectedDay);
+
+    // أي عنصر ليه منبّه => يظهر في يوم المنبّه
+    if (item.alarmTime != null) return _sameDay(item.alarmTime!, selected);
+
+    // التاسكس اللي لسه متعملتش ومالهاش ميعاد:
+    // تظهر في يوم إنشائها، وكمان في النهارده عشان ما تضيعش
+    if (!item.isTask || item.isCompleted) return false;
+    if (_sameDay(selected, DateTime.now())) return true;
+    final created = _createdDate(item);
+    return created != null && _sameDay(created, selected);
   }
 
   @override
@@ -50,7 +69,19 @@ class _CalendarViewState extends State<CalendarView> {
 
     return Scaffold(
       backgroundColor: context.bgColor,
-      appBar: AppBar(title: const Text('Calendar')),
+      appBar: AppBar(
+        title: const Text('Calendar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_today_outlined),
+            onPressed: () => setState(() {
+              _focusedMonth = DateTime.now();
+              _selectedDay = DateTime.now().day;
+            }),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: BlocBuilder<NotesCubit, NotesState>(
         builder: (context, state) {
           final cubit = BlocProvider.of<NotesCubit>(context);
@@ -190,20 +221,29 @@ class _CalendarViewState extends State<CalendarView> {
                 ),
               ),
               const SizedBox(height: 22),
-              Text(
-                'Scheduled Alarms & Events',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: context.primaryTextColor,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Today's Events",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: context.primaryTextColor,
+                    ),
+                  ),
+                  Text(
+                    'See all →',
+                    style: TextStyle(fontSize: 13, color: context.secondaryTextColor),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               if (dayItems.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'No scheduled alarms yet.',
+                    'No events for this day.',
                     style: TextStyle(color: context.secondaryTextColor),
                   ),
                 )
@@ -230,22 +270,35 @@ class _CalendarViewState extends State<CalendarView> {
                           builder: (_) => EditTaskSheet(task: item),
                         ),
                         leading: Icon(
-                          Icons.alarm_rounded,
+                          item.isTask
+                              ? (item.isCompleted
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked)
+                              : Icons.alarm_rounded,
                           color: isDark ? AppColors.darkAccentLavender : AppColors.primaryDark,
                         ),
                         title: Text(
                           item.title,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: context.primaryTextColor,
+                            decoration: item.isTask && item.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color: item.isCompleted
+                                ? context.secondaryTextColor
+                                : context.primaryTextColor,
                           ),
                         ),
-                        subtitle: item.alarmTime != null
-                            ? Text(
-                                '${item.alarmTime!.hour}:${item.alarmTime!.minute.toString().padLeft(2, '0')}',
-                                style: TextStyle(color: context.secondaryTextColor),
-                              )
-                            : null,
+                        subtitle: Text(
+                          [
+                            if (item.alarmTime != null)
+                              '${item.alarmTime!.hour}:${item.alarmTime!.minute.toString().padLeft(2, '0')}',
+                            if (item.isTask) item.priority,
+                            if (item.isTask && item.alarmTime == null)
+                              'No due time',
+                          ].join(' • '),
+                          style: TextStyle(color: context.secondaryTextColor),
+                        ),
                       ),
                     ),
                   ),

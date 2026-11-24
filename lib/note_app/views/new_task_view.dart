@@ -17,7 +17,9 @@ class _NewTaskViewState extends State<NewTaskView> {
 
   String _priority = 'High';
   DateTime? _dueAlarm;
+  late String _selectedSoundId = AlarmService.instance.defaultSoundId;
   bool _isSaving = false;
+  bool _repeat = false;
 
   final List<String> _priorities = ['High', 'Medium', 'Low'];
 
@@ -110,6 +112,7 @@ class _NewTaskViewState extends State<NewTaskView> {
               title: task.title,
               body: task.subTitle.isNotEmpty ? task.subTitle : 'Task alarm reminder',
               scheduledTime: _dueAlarm!,
+              soundOption: _selectedSoundId,
             )
             .timeout(const Duration(seconds: 2));
       } catch (e) {
@@ -121,6 +124,50 @@ class _NewTaskViewState extends State<NewTaskView> {
       debugPrint('4. Popping NewTaskView...');
       Navigator.of(context).pop();
     }
+  }
+
+  Widget _pickChip({
+    required IconData icon,
+    required String text,
+    required Color cardColor,
+    required Color borderColor,
+    required Color textPrimary,
+    required Color textSecondary,
+  }) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        backgroundColor: cardColor,
+        side: BorderSide(color: borderColor),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: _pickDateTime,
+      icon: Icon(icon, size: 18, color: _dueAlarm != null ? textPrimary : textSecondary),
+      label: Text(text,
+          style: TextStyle(
+              fontSize: 13,
+              color: _dueAlarm != null ? textPrimary : textSecondary)),
+    );
+  }
+
+  Widget _rowTile(IconData icon, String text, Color cardColor, Color borderColor,
+      Color textSecondary) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: textSecondary),
+          const SizedBox(width: 10),
+          Text(text, style: TextStyle(color: textSecondary)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -244,32 +291,91 @@ class _NewTaskViewState extends State<NewTaskView> {
             }).toList(),
           ),
           const SizedBox(height: 18),
-          Text(
-            'Due Date & Alarm',
-            style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary),
-          ),
+          Text('Due Date',
+              style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              backgroundColor: cardColor,
-              side: BorderSide(color: borderColor),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: _pickDateTime,
-            icon: Icon(
-              Icons.alarm,
-              color: _dueAlarm != null ? accentColor : textSecondary,
-            ),
-            label: Text(
-              _dueAlarm == null
-                  ? 'Select Date & Time'
-                  : '${_dueAlarm!.day}/${_dueAlarm!.month}/${_dueAlarm!.year}  •  ${_dueAlarm!.hour}:${_dueAlarm!.minute.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                color: _dueAlarm != null ? textPrimary : textSecondary,
-                fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Expanded(
+                child: _pickChip(
+                  icon: Icons.calendar_today_outlined,
+                  text: _dueAlarm == null
+                      ? 'Select date'
+                      : '${_dueAlarm!.day}/${_dueAlarm!.month}/${_dueAlarm!.year}',
+                  cardColor: cardColor,
+                  borderColor: borderColor,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _pickChip(
+                  icon: Icons.access_time,
+                  text: _dueAlarm == null
+                      ? 'Select time'
+                      : '${_dueAlarm!.hour}:${_dueAlarm!.minute.toString().padLeft(2, '0')}',
+                  cardColor: cardColor,
+                  borderColor: borderColor,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                ),
+              ),
+            ],
+          ),
+          if (_dueAlarm != null) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedSoundId,
+              dropdownColor: cardColor,
+              style: TextStyle(color: textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Alarm Sound',
+                labelStyle: TextStyle(color: textSecondary),
+                prefixIcon: Icon(Icons.music_note_rounded, color: textSecondary),
+                filled: true,
+                fillColor: cardColor,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: accentColor, width: 1.5),
+                ),
+              ),
+              items: AlarmService.soundOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String>(
+                      value: opt.id,
+                      child: Text(opt.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedSoundId = val);
+              },
             ),
+          ],
+          const SizedBox(height: 18),
+          Text('Subtasks',
+              style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
+          const SizedBox(height: 8),
+          _rowTile(Icons.add_circle_outline, 'Add subtask...', cardColor,
+              borderColor, textSecondary),
+          const SizedBox(height: 18),
+          Text('Link to Note (Optional)',
+              style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
+          const SizedBox(height: 8),
+          _rowTile(Icons.sticky_note_2_outlined, 'Select Note', cardColor,
+              borderColor, textSecondary),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Repeat Task', style: TextStyle(color: textPrimary)),
+            value: _repeat,
+            activeColor: accentColor,
+            onChanged: (v) => setState(() => _repeat = v),
           ),
         ],
       ),

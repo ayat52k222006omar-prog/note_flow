@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
-import 'core/app_theme.dart';
-import 'core/theme_controller.dart';
-import 'models/note_model.dart';
-import 'services/alarm_service.dart';
-import 'views/splash_view.dart';
+import 'note_app/core/app_theme.dart';
+import 'note_app/core/theme_controller.dart';
+import 'note_app/models/note_model.dart';
+import 'note_app/services/alarm_service.dart';
+import 'note_app/views/splash_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

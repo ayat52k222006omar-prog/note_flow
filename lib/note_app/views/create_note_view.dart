@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
 import 'package:myfirstapp/note_app/models/note_model.dart';
 import 'package:myfirstapp/note_app/services/alarm_service.dart';
+import '../widgets/rich_text_tools.dart';
 
 class CreateNoteView extends StatefulWidget {
   const CreateNoteView({super.key});
@@ -13,12 +14,13 @@ class CreateNoteView extends StatefulWidget {
 
 class _CreateNoteViewState extends State<CreateNoteView> {
   final TextEditingController _titleCtrl = TextEditingController();
-  final TextEditingController _bodyCtrl = TextEditingController();
+  final RichTextController _bodyCtrl = RichTextController();
 
   String _selectedCategory = 'Work';
   int _selectedColorIndex = 0;
   bool _isPinned = false;
   DateTime? _alarmTime;
+  late String _selectedSoundId = AlarmService.instance.defaultSoundId;
   bool _isSaving = false;
 
   final List<String> _categories = ['Work', 'Personal', 'Study'];
@@ -27,13 +29,47 @@ class _CreateNoteViewState extends State<CreateNoteView> {
     const Color(0xFF738598),
     const Color(0xFFC9C4D8),
     const Color(0xFFD5E2D8),
+    const Color(0xFFE6C9A8),
+    const Color(0xFFE3B7C8),
+    const Color(0xFFB9D3E8),
   ];
+  final List<String> _tags = [];
 
   @override
   void dispose() {
     _titleCtrl.dispose();
     _bodyCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _addTag() async {
+    final ctrl = TextEditingController();
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Tag'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+          decoration: const InputDecoration(hintText: 'Tag name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    final clean = tag?.replaceAll(RegExp(r'[,{}]'), '').trim();
+    if (clean == null || clean.isEmpty || _tags.contains(clean)) return;
+    setState(() => _tags.add(clean));
   }
 
   Future<void> _pickAlarm() async {
@@ -85,7 +121,7 @@ class _CreateNoteViewState extends State<CreateNoteView> {
     final note = NoteModel(
       id: id,
       title: title,
-      subTitle: _bodyCtrl.text.trim(),
+      subTitle: joinTags(_bodyCtrl.text.trim(), _tags),
       date: '${now.day}/${now.month}/${now.year}',
       color: _cardColors[_selectedColorIndex].value,
       category: _selectedCategory,
@@ -116,8 +152,11 @@ class _CreateNoteViewState extends State<CreateNoteView> {
             .scheduleAlarm(
               id: id,
               title: note.title,
-              body: note.subTitle.isNotEmpty ? note.subTitle : 'Note reminder',
+              body: stripRich(note.subTitle).isNotEmpty
+                  ? stripRich(note.subTitle)
+                  : 'Note reminder',
               scheduledTime: _alarmTime!,
+              soundOption: _selectedSoundId,
             )
             .timeout(const Duration(seconds: 2));
       } catch (e) {
@@ -170,6 +209,25 @@ class _CreateNoteViewState extends State<CreateNoteView> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          Container(
+            height: 90,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1F233D) : const Color(0xFFC9D0D8),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.image_outlined, size: 30, color: textSecondary),
+                const SizedBox(height: 4),
+                Text('Add Cover Image', style: TextStyle(color: textSecondary)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Note Title',
+              style: TextStyle(fontWeight: FontWeight.w600, color: textSecondary)),
+          const SizedBox(height: 6),
           TextField(
             controller: _titleCtrl,
             style: TextStyle(color: textPrimary, fontSize: 15),
@@ -189,6 +247,13 @@ class _CreateNoteViewState extends State<CreateNoteView> {
             ),
           ),
           const SizedBox(height: 14),
+          RichToolbar(
+            controller: _bodyCtrl,
+            cardColor: cardColor,
+            borderColor: borderColor,
+            iconColor: textSecondary,
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _bodyCtrl,
             maxLines: 6,
@@ -207,6 +272,24 @@ class _CreateNoteViewState extends State<CreateNoteView> {
                 borderSide: BorderSide(color: accentColor, width: 1.5),
               ),
             ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 8,
+            children: [
+              ..._tags.map((t) => Chip(
+                    label: Text(t, style: TextStyle(fontSize: 12, color: textPrimary)),
+                    backgroundColor: cardColor,
+                    side: BorderSide(color: borderColor),
+                    deleteIcon: Icon(Icons.close, size: 14, color: textSecondary),
+                    onDeleted: () => setState(() => _tags.remove(t)),
+                  )),
+              ActionChip(
+                label: Text('+ Add Tag', style: TextStyle(fontSize: 12, color: textSecondary)),
+                backgroundColor: Colors.transparent,
+                onPressed: _addTag,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Text(
@@ -253,7 +336,7 @@ class _CreateNoteViewState extends State<CreateNoteView> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Card Color',
+            'Choose Category Color',
             style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary),
           ),
           const SizedBox(height: 10),
@@ -299,6 +382,40 @@ class _CreateNoteViewState extends State<CreateNoteView> {
             ),
             onTap: _pickAlarm,
           ),
+          if (_alarmTime != null) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedSoundId,
+              dropdownColor: cardColor,
+              style: TextStyle(color: textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Alarm Sound',
+                labelStyle: TextStyle(color: textSecondary),
+                prefixIcon: Icon(Icons.music_note_rounded, color: textSecondary),
+                filled: true,
+                fillColor: cardColor,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: accentColor, width: 1.5),
+                ),
+              ),
+              items: AlarmService.soundOptions
+                  .map(
+                    (opt) => DropdownMenuItem<String>(
+                      value: opt.id,
+                      child: Text(opt.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedSoundId = val);
+              },
+            ),
+          ],
           const SizedBox(height: 18),
           SizedBox(
             height: 50,
