@@ -32,32 +32,54 @@ class _CalendarViewState extends State<CalendarView> {
     return DateTime(date.year, date.month, 1).weekday % 7;
   }
 
-  DateTime? _createdDate(NoteModel n) {
-    final p = n.date.split('/');
-    if (p.length != 3) return null;
-    final d = int.tryParse(p[0]);
-    final m = int.tryParse(p[1]);
-    final y = int.tryParse(p[2]);
-    if (d == null || m == null || y == null) return null;
-    return DateTime(y, m, d);
+  DateTime? _parseDateString(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    // صيغة d/M/yyyy أو dd/MM/yyyy
+    final slashParts = trimmed.split('/');
+    if (slashParts.length == 3) {
+      final d = int.tryParse(slashParts[0]);
+      final m = int.tryParse(slashParts[1]);
+      final y = int.tryParse(slashParts[2]);
+      if (d != null && m != null && y != null) {
+        return DateTime(y, m, d);
+      }
+    }
+
+    // صيغة yyyy-MM-dd أو ISO
+    final parsed = DateTime.tryParse(trimmed);
+    if (parsed != null) {
+      return DateTime(parsed.year, parsed.month, parsed.day);
+    }
+
+    return null;
+  }
+
+  DateTime? _taskDate(NoteModel item) {
+    if (item.alarmTime != null) {
+      return DateTime(
+        item.alarmTime!.year,
+        item.alarmTime!.month,
+        item.alarmTime!.day,
+      );
+    }
+    return _parseDateString(item.date);
   }
 
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  bool _matchesDay(NoteModel item, DateTime targetDay) {
+    if (!item.isTask) return false;
+    final date = _taskDate(item);
+    return date != null && _sameDay(date, targetDay);
+  }
+
   bool _matchesSelectedDay(NoteModel item) {
     final selected =
         DateTime(_focusedMonth.year, _focusedMonth.month, _selectedDay);
-
-    // أي عنصر ليه منبّه => يظهر في يوم المنبّه
-    if (item.alarmTime != null) return _sameDay(item.alarmTime!, selected);
-
-    // التاسكس اللي لسه متعملتش ومالهاش ميعاد:
-    // تظهر في يوم إنشائها، وكمان في النهارده عشان ما تضيعش
-    if (!item.isTask || item.isCompleted) return false;
-    if (_sameDay(selected, DateTime.now())) return true;
-    final created = _createdDate(item);
-    return created != null && _sameDay(created, selected);
+    return _matchesDay(item, selected);
   }
 
   @override
@@ -66,6 +88,9 @@ class _CalendarViewState extends State<CalendarView> {
     final totalDays = _daysInMonth(_focusedMonth);
     final startOffset = _firstWeekdayOffset(_focusedMonth);
     final now = DateTime.now();
+    final selectedDate =
+        DateTime(_focusedMonth.year, _focusedMonth.month, _selectedDay);
+    final isSelectedToday = _sameDay(selectedDate, now);
 
     return Scaffold(
       backgroundColor: context.bgColor,
@@ -179,10 +204,17 @@ class _CalendarViewState extends State<CalendarView> {
                           return const SizedBox.shrink();
                         }
                         final day = index - startOffset + 1;
+                        final cellDate = DateTime(
+                          _focusedMonth.year,
+                          _focusedMonth.month,
+                          day,
+                        );
                         final isSelected = day == _selectedDay;
                         final isToday = day == now.day &&
                             _focusedMonth.month == now.month &&
                             _focusedMonth.year == now.year;
+                        final hasTasks =
+                            items.any((item) => _matchesDay(item, cellDate));
 
                         return GestureDetector(
                           onTap: () => setState(() => _selectedDay = day),
@@ -202,16 +234,35 @@ class _CalendarViewState extends State<CalendarView> {
                                     )
                                   : null,
                             ),
-                            child: Text(
-                              '$day',
-                              style: TextStyle(
-                                fontWeight: (isSelected || isToday)
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: isSelected
-                                    ? Colors.white
-                                    : context.primaryTextColor,
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '$day',
+                                  style: TextStyle(
+                                    fontWeight: (isSelected || isToday)
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : context.primaryTextColor,
+                                  ),
+                                ),
+                                if (hasTasks)
+                                  Container(
+                                    width: 5,
+                                    height: 5,
+                                    margin: const EdgeInsets.only(top: 2),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : (isDark
+                                              ? AppColors.darkAccentLavender
+                                              : AppColors.primaryDark),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         );
@@ -225,7 +276,9 @@ class _CalendarViewState extends State<CalendarView> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Today's Events",
+                    isSelectedToday
+                        ? "Today's Tasks"
+                        : 'Tasks on $_selectedDay/${_focusedMonth.month}/${_focusedMonth.year}',
                     style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -233,7 +286,7 @@ class _CalendarViewState extends State<CalendarView> {
                     ),
                   ),
                   Text(
-                    'See all →',
+                    '${dayItems.length}',
                     style: TextStyle(fontSize: 13, color: context.secondaryTextColor),
                   ),
                 ],
@@ -243,7 +296,7 @@ class _CalendarViewState extends State<CalendarView> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'No events for this day.',
+                    'No tasks for this day.',
                     style: TextStyle(color: context.secondaryTextColor),
                   ),
                 )
@@ -270,18 +323,16 @@ class _CalendarViewState extends State<CalendarView> {
                           builder: (_) => EditTaskSheet(task: item),
                         ),
                         leading: Icon(
-                          item.isTask
-                              ? (item.isCompleted
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked)
-                              : Icons.alarm_rounded,
+                          item.isCompleted
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
                           color: isDark ? AppColors.darkAccentLavender : AppColors.primaryDark,
                         ),
                         title: Text(
                           item.title,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            decoration: item.isTask && item.isCompleted
+                            decoration: item.isCompleted
                                 ? TextDecoration.lineThrough
                                 : null,
                             color: item.isCompleted
@@ -293,9 +344,8 @@ class _CalendarViewState extends State<CalendarView> {
                           [
                             if (item.alarmTime != null)
                               '${item.alarmTime!.hour}:${item.alarmTime!.minute.toString().padLeft(2, '0')}',
-                            if (item.isTask) item.priority,
-                            if (item.isTask && item.alarmTime == null)
-                              'No due time',
+                            item.priority,
+                            if (item.alarmTime == null) item.date,
                           ].join(' • '),
                           style: TextStyle(color: context.secondaryTextColor),
                         ),

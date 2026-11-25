@@ -2,10 +2,9 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:myfirstapp/note_app/cubit/cubit/notes_cubit.dart';
-import 'package:myfirstapp/note_app/views/home_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_theme.dart';
 import '../core/theme_controller.dart';
-//import 'login_view.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -15,8 +14,10 @@ class ProfileView extends StatefulWidget {
 }
 
 class _ProfileViewState extends State<ProfileView> {
-  String _userName = 'Ayat Kamal Ali Omar';
-  String _userEmail = 'ayat.kamal@noteflow.app';
+  static const String _defaultSoundPrefKey = 'default_alarm_sound_file';
+
+  String _userName = 'Ahmed Talaat';
+  String _userEmail = 'ahmedtalet477@gmail.com';
   String _lastSyncText = 'Synced 2m ago';
 
   bool _alarmSoundEnabled = true;
@@ -27,8 +28,9 @@ class _ProfileViewState extends State<ProfileView> {
   final AudioPlayer _previewPlayer = AudioPlayer();
   String _selectedSoundFile = 'sound1.mp3';
   String? _playingSoundFile;
+  void Function(void Function())? _activeModalUpdater;
 
-  static const List> _soundOptions = [
+  static const _soundOptions = [
     {'file': 'sound1.mp3', 'label': 'Sound 1'},
     {'file': 'sound2.mp3', 'label': 'Sound 2'},
     {'file': 'sound3.mp3', 'label': 'Sound 3'},
@@ -49,6 +51,43 @@ class _ProfileViewState extends State<ProfileView> {
 
   Color get _secondaryTextColor =>
       _isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSound();
+    _previewPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        _activeModalUpdater?.call(() => _playingSoundFile = null);
+        setState(() => _playingSoundFile = null);
+      }
+    });
+  }
+
+  Future<void> _loadSavedSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_defaultSoundPrefKey);
+    if (saved != null &&
+        _soundOptions.any((opt) => opt['file'] == saved) &&
+        mounted) {
+      setState(() => _selectedSoundFile = saved);
+    }
+  }
+
+  Future<void> _saveDefaultSound(
+    String fileName,
+    void Function(void Function()) setModalState,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_defaultSoundPrefKey, fileName);
+    if (mounted) {
+      setModalState(() => _selectedSoundFile = fileName);
+      setState(() => _selectedSoundFile = fileName);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Default alarm sound set to $fileName')),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -134,7 +173,8 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isDark ? AppColors.darkAccentPurple : AppColors.primaryDark,
+              backgroundColor:
+                  _isDark ? AppColors.darkAccentPurple : AppColors.primaryDark,
             ),
             onPressed: () {
               if (nameCtrl.text.trim().isNotEmpty) {
@@ -207,11 +247,29 @@ class _ProfileViewState extends State<ProfileView> {
         children: [
           Row(
             children: [
-              Expanded(child: _StatMiniBox(label: 'Notes', value: '$notesCount', color: AppColors.slateBlue)),
+              Expanded(
+                child: _StatMiniBox(
+                  label: 'Notes',
+                  value: '$notesCount',
+                  color: AppColors.slateBlue,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _StatMiniBox(label: 'Tasks', value: '${tasks.length}', color: AppColors.darkAccentPurple)),
+              Expanded(
+                child: _StatMiniBox(
+                  label: 'Tasks',
+                  value: '${tasks.length}',
+                  color: AppColors.darkAccentPurple,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _StatMiniBox(label: 'Alarms', value: '$alarmsCount', color: const Color(0xFF4F6D7A))),
+              Expanded(
+                child: _StatMiniBox(
+                  label: 'Alarms',
+                  value: '$alarmsCount',
+                  color: const Color(0xFF4F6D7A),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -229,7 +287,10 @@ class _ProfileViewState extends State<ProfileView> {
                   children: [
                     Text(
                       'Completed Tasks',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: _primaryTextColor),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: _primaryTextColor,
+                      ),
                     ),
                     Text(
                       '$completedCount / ${tasks.length} (${(ratio * 100).toInt()}%)',
@@ -266,6 +327,7 @@ class _ProfileViewState extends State<ProfileView> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
           modalUpdater = setModalState;
+          _activeModalUpdater = setModalState;
           final accent = _isDark ? AppColors.darkAccentPurple : AppColors.primaryDark;
 
           return SafeArea(
@@ -312,7 +374,10 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text('Due & Reminder Alerts', style: TextStyle(color: _primaryTextColor)),
+                    title: Text(
+                      'Due & Reminder Alerts',
+                      style: TextStyle(color: _primaryTextColor),
+                    ),
                     subtitle: Text(
                       'Notify for upcoming tasks and notes',
                       style: TextStyle(color: _secondaryTextColor),
@@ -326,7 +391,7 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Listen & Choose Sound',
+                    'Listen & Choose Default Sound',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
@@ -360,10 +425,7 @@ class _ProfileViewState extends State<ProfileView> {
                           ),
                           child: ListTile(
                             dense: true,
-                            onTap: () {
-                              setModalState(() => _selectedSoundFile = file);
-                              setState(() => _selectedSoundFile = file);
-                            },
+                            onTap: () => _saveDefaultSound(file, setModalState),
                             leading: IconButton(
                               tooltip: isPlaying ? 'Stop sound' : 'Listen first',
                               icon: Icon(
@@ -383,15 +445,19 @@ class _ProfileViewState extends State<ProfileView> {
                               ),
                             ),
                             subtitle: Text(
-                              isPlaying ? 'Playing preview...' : file,
+                              isPlaying
+                                  ? 'Playing preview...'
+                                  : (isSelected ? 'Default • $file' : file),
                               style: TextStyle(
-                                color: isPlaying ? accent : _secondaryTextColor,
+                                color: (isPlaying || isSelected)
+                                    ? accent
+                                    : _secondaryTextColor,
                                 fontSize: 12,
                               ),
                             ),
                             trailing: Icon(
                               isSelected
-                                  ? Icons.radio_button_checked
+                                  ? Icons.check_circle_rounded
                                   : Icons.radio_button_unchecked,
                               color: isSelected ? accent : _secondaryTextColor,
                             ),
@@ -406,7 +472,10 @@ class _ProfileViewState extends State<ProfileView> {
           );
         },
       ),
-    ).whenComplete(() => _stopPreview(modalUpdater));
+    ).whenComplete(() {
+      _activeModalUpdater = null;
+      _stopPreview(modalUpdater);
+    });
   }
 
   void _openSecurity() {
@@ -429,7 +498,10 @@ class _ProfileViewState extends State<ProfileView> {
               },
             ),
             SwitchListTile(
-              title: Text('Confirm Before Delete', style: TextStyle(color: _primaryTextColor)),
+              title: Text(
+                'Confirm Before Delete',
+                style: TextStyle(color: _primaryTextColor),
+              ),
               subtitle: Text(
                 'Ask confirmation before removing items',
                 style: TextStyle(color: _secondaryTextColor),
@@ -470,7 +542,7 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Support: support@noteflow.app',
+            'Support: 01505309975 • support@noteflow.app',
             style: TextStyle(
               fontSize: 13,
               color: _secondaryTextColor,
@@ -539,7 +611,7 @@ class _ProfileViewState extends State<ProfileView> {
     final isDark = _isDark;
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 28),
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(20, 52, 20, 26),
@@ -717,31 +789,6 @@ class _ProfileViewState extends State<ProfileView> {
           trailing: Icon(Icons.chevron_right, color: _secondaryTextColor),
           onTap: _openAboutApp,
         ),
-        const SizedBox(height: 18),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDark ? AppColors.darkAccentPurple : AppColors.primaryDark,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const HomeView()),
-                  (_) => false,
-                );
-              },
-              icon: const Icon(Icons.logout_rounded, color: Colors.white),
-              label: const Text(
-                'Log Out',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -752,7 +799,11 @@ class _StatMiniBox extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatMiniBox({required this.label, required this.value, required this.color});
+  const _StatMiniBox({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -766,7 +817,11 @@ class _StatMiniBox extends StatelessWidget {
         children: [
           Text(
             value,
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 2),
           Text(

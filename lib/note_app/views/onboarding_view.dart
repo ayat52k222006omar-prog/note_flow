@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_theme.dart';
-import 'home_view.dart'; // غيّري المسار ده لاسم ملف الهوم الفعلي عندك إذا اختلف
+import 'main_layout.dart';
 
 class OnboardingView extends StatefulWidget {
-  const OnboardingView({super.key});
+  final Widget? nextPage;
+
+  const OnboardingView({super.key, this.nextPage});
 
   static const String _prefKey = 'noteflow_onboarding_completed';
 
@@ -60,7 +62,9 @@ class _OnboardingViewState extends State<OnboardingView> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeView()), // غيّري HomeView لاسم صفحة الهوم عندك
+      MaterialPageRoute(
+        builder: (_) => widget.nextPage ?? const MainLayout(),
+      ),
       (_) => false,
     );
   }

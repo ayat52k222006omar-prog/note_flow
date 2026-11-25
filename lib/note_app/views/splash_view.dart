@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/app_theme.dart';
+import 'main_layout.dart';
 import 'onboarding_view.dart';
 
 class SplashView extends StatefulWidget {
@@ -11,23 +11,32 @@ class SplashView extends StatefulWidget {
 }
 
 class _SplashViewState extends State<SplashView> {
-  Timer? _timer;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnboardingView()),
-      );
-    });
+    _navigateNext();
+  }
+
+  Future<void> _navigateNext() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted || _isDisposed) return;
+
+    final completed = await OnboardingView.hasCompleted();
+    if (!mounted || _isDisposed) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => completed ? const MainLayout() : const OnboardingView(),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _isDisposed = true;
     super.dispose();
   }
 
@@ -51,20 +60,26 @@ class _SplashViewState extends State<SplashView> {
                 borderRadius: BorderRadius.circular(24),
                 border: isDark ? Border.all(color: AppColors.darkBorder) : null,
               ),
-              child: Icon(Icons.edit_note_rounded,
-                  size: 64,
-                  color: isDark ? AppColors.darkAccentLavender : accent),
+              child: Icon(
+                Icons.edit_note_rounded,
+                size: 64,
+                color: isDark ? AppColors.darkAccentLavender : accent,
+              ),
             ),
             const SizedBox(height: 18),
             Text(
               'NoteFlow',
               style: TextStyle(
-                  fontSize: 32, fontWeight: FontWeight.w800, color: accent),
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                color: accent,
+              ),
             ),
             const SizedBox(height: 6),
-            Text('Get Things Done',
-                style:
-                    TextStyle(fontSize: 15, color: context.secondaryTextColor)),
+            Text(
+              'Get Things Done',
+              style: TextStyle(fontSize: 15, color: context.secondaryTextColor),
+            ),
             const SizedBox(height: 44),
             SizedBox(
               width: 28,
